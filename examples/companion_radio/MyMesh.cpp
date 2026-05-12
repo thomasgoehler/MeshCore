@@ -2229,6 +2229,9 @@ void MyMesh::checkSerialInterface() {
 
 void MyMesh::loop() {
   BaseChatMesh::loop();
+#ifdef WITH_SERIAL_FORWARD
+  serial_forward.loop();
+#endif
 
   if (_cli_rescue) {
     checkCLIRescueCmd();

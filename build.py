@@ -27,6 +27,7 @@ HELP_TEXT = """Usage:
 python build.py <command> [target]
 
 Commands:
+  (no arguments): Launch interactive build mode.
   help|usage|-h|--help: Shows this message.
   list|-l: List firmwares available to build.
   build-firmware <target> [target...]: Build the firmware for the given build target(s).
@@ -118,26 +119,30 @@ def make_build_info() -> BuildInfo:
     return BuildInfo(version=version, commit=commit, build_date=build_date, env=env)
 
 
-def load_config() -> tuple[list[str], dict[str, str | None]]:
+def load_config() -> tuple[list[str], dict[str, str | None], list[str]]:
     config = json.loads(run(["pio", "project", "config", "--json-output"], capture=True))
     envs: list[str] = []
     platforms: dict[str, str | None] = {}
+    bases: list[str] = []
     for section, options in config:
-        if not isinstance(section, str) or not section.startswith("env:"):
+        if not isinstance(section, str):
             continue
-        env_name = section.removeprefix("env:")
-        envs.append(env_name)
-        platforms[env_name] = next(
-            (
-                match.group(1)
-                for key, value in options
-                if key == "build_flags" and isinstance(value, list)
-                for flag in value
-                if isinstance(flag, str) and (match := PLATFORM_PATTERN.search(flag))
-            ),
-            None,
-        )
-    return envs, platforms
+        if section.startswith("env:"):
+            env_name = section.removeprefix("env:")
+            envs.append(env_name)
+            platforms[env_name] = next(
+                (
+                    match.group(1)
+                    for key, value in options
+                    if key == "build_flags" and isinstance(value, list)
+                    for flag in value
+                    if isinstance(flag, str) and (match := PLATFORM_PATTERN.search(flag))
+                ),
+                None,
+            )
+        elif section not in ("platformio", "env"):
+            bases.append(section)
+    return envs, platforms, bases
 
 
 def select_envs(envs: list[str], *, contains: str | None = None, suffixes: tuple[str, ...] = ()) -> list[str]:
@@ -200,15 +205,137 @@ def print_usage(exit_code: int, *, stream: object = sys.stdout) -> int:
     return exit_code
 
 
+# ---------------------------------------------------------------------------
+# Interactive mode
+# ---------------------------------------------------------------------------
+
+def _detect_default_version() -> str:
+    if version := os.environ.get("FIRMWARE_VERSION", "").strip():
+        return version
+    try:
+        tag = run(["git", "describe", "--tags", "--abbrev=0"], capture=True).strip()
+        if tag:
+            return tag
+    except Exception:
+        pass
+    return "v1.15.0"
+
+
+def _prompt(label: str, default: str = "") -> str:
+    hint = f" [{default}]" if default else ""
+    answer = input(f"{label}{hint}: ").strip()
+    return answer if answer else default
+
+
+def _group_envs(envs: list[str], bases: list[str]) -> dict[str, list[str]]:
+    """Group env names by their base section (longest matching prefix wins)."""
+    groups: dict[str, list[str]] = {}
+    for env in envs:
+        best = ""
+        for base in bases:
+            if env.lower().startswith(base.lower()) and len(base) > len(best):
+                best = base
+        groups.setdefault(best or "_other", []).append(env)
+    return groups
+
+
+def _env_label(env: str, base: str) -> str:
+    """Return just the suffix part of an env name for display."""
+    if env.lower().startswith(base.lower()):
+        return env[len(base):].lstrip("_") or env
+    return env
+
+
+def _pick_from_list(items: list[str], label: str) -> int:
+    """Show a numbered list and return the 0-based index of the chosen item."""
+    for i, item in enumerate(items, 1):
+        print(f"  {i:>3})  {item}")
+    while True:
+        raw = _prompt(f"\n{label}").strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(items):
+            return int(raw) - 1
+        print("       Invalid — enter a number from the list.")
+
+
+def interactive(envs: list[str], platforms: dict[str, str | None], bases: list[str]) -> tuple[list[str], str]:
+    """
+    Interactive build wizard.
+    Returns (selected_env_names, version).
+    """
+    print()
+    print("╔══════════════════════════════════╗")
+    print("║   MeshCore Interactive Builder   ║")
+    print("╚══════════════════════════════════╝")
+    print()
+
+    # --- Version ---
+    default_ver = _detect_default_version()
+    version = _prompt("Firmware version", default_ver)
+    if not version:
+        print("Version cannot be empty.", file=sys.stderr)
+        raise SystemExit(1)
+
+    # --- Group envs by base variant ---
+    groups = _group_envs(envs, bases)
+    variant_keys = [k for k in groups if k != "_other"]
+    variant_keys.sort(key=str.lower)
+    if "_other" in groups:
+        variant_keys.append("_other")
+
+    # --- Pick base variant ---
+    print("\nBoard variant:")
+    variant_idx = _pick_from_list(variant_keys, "Select variant")
+    selected_base = variant_keys[variant_idx]
+    variant_envs = groups[selected_base]
+
+    # --- Pick target(s) ---
+    labels = [_env_label(e, selected_base) for e in variant_envs]
+    print(f"\nTarget  ({selected_base}):")
+    for i, lbl in enumerate(labels, 1):
+        print(f"  {i:>3})  {lbl}")
+    print(f"  all)  Build all {len(variant_envs)} targets")
+
+    while True:
+        raw = _prompt("\nSelect target(s)  (e.g. 1  or  1 3  or  all)").strip().lower()
+        if raw == "all":
+            selected = variant_envs
+            break
+        parts = raw.split()
+        if parts and all(p.isdigit() and 1 <= int(p) <= len(variant_envs) for p in parts):
+            selected = [variant_envs[int(p) - 1] for p in parts]
+            break
+        print("       Invalid — enter number(s) from the list or 'all'.")
+
+    # --- Confirm ---
+    print()
+    print(f"  Version : {version}")
+    print(f"  Target(s): {', '.join(selected)}")
+    confirm = _prompt("\nStart build? [Y/n]", "Y").strip().upper()
+    if confirm not in ("Y", "YES", ""):
+        print("Cancelled.")
+        raise SystemExit(0)
+
+    return selected, version
+
+
+# ---------------------------------------------------------------------------
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
-        return print_usage(0)
+        envs, platforms, bases = load_config()
+        targets, version = interactive(envs, platforms, bases)
+        os.environ["FIRMWARE_VERSION"] = version
+        reset_out_dir()
+        build = make_build_info()
+        for env_name in targets:
+            build_target(env_name, platforms.get(env_name), build)
+        return 0
 
     command, args = argv[1], argv[2:]
     if command in {"help", "usage", "-h", "--help"}:
         return print_usage(1)
 
-    envs, platforms = load_config()
+    envs, platforms, bases = load_config()
 
     if command in {"list", "-l"}:
         print("\n".join(envs))
@@ -218,7 +345,7 @@ def main(argv: list[str]) -> int:
         if not args:
             print("usage: python build.py build-firmware <target> [target...]", file=sys.stderr)
             return 1
-        targets = args
+        targets = list(args)
     elif command == "build-matching-firmwares":
         if len(args) != 1:
             print("usage: python build.py build-matching-firmwares <build-match-spec>", file=sys.stderr)
