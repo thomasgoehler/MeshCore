@@ -523,6 +523,9 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
                            const char *text) {
   markConnectionActive(from); // in case this is from a server, and we have a connection
   queueMessage(from, TXT_TYPE_PLAIN, pkt, sender_timestamp, NULL, 0, text);
+#ifdef WITH_SERIAL_FORWARD
+  serial_forward.forwardDM(from.name, sender_timestamp, text);
+#endif
 }
 
 void MyMesh::onCommandDataRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
@@ -583,6 +586,14 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
     channel_name = channel_details.name;
   }
   if (_ui) _ui->newMsg(path_len, channel_name, text, offline_queue_len);
+#endif
+#ifdef WITH_SERIAL_FORWARD
+  {
+    const char *fwd_name = "Unknown";
+    ChannelDetails fwd_details;
+    if (getChannel(channel_idx, fwd_details)) fwd_name = fwd_details.name;
+    serial_forward.forwardChannel(fwd_name, timestamp, text);
+  }
 #endif
 }
 
@@ -890,6 +901,9 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
 
 void MyMesh::begin(bool has_display) {
   BaseChatMesh::begin();
+#ifdef WITH_SERIAL_FORWARD
+  serial_forward.begin();
+#endif
 
   if (!_store->loadMainIdentity(self_id)) {
     self_id = radio_new_identity(); // create new random identity

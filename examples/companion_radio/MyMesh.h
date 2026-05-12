@@ -69,6 +69,9 @@
 
 #include <helpers/BaseChatMesh.h>
 #include <helpers/TransportKeyStore.h>
+#ifdef WITH_SERIAL_FORWARD
+#include <helpers/SerialForward.h>
+#endif
 
 /* -------------------------------------------------------------------------------------- */
 
