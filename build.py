@@ -212,10 +212,13 @@ def print_usage(exit_code: int, *, stream: object = sys.stdout) -> int:
 def _detect_default_version() -> str:
     if version := os.environ.get("FIRMWARE_VERSION", "").strip():
         return version
+    # Read from MyMesh.h — the authoritative version definition
+    mymesh = ROOT / "examples" / "companion_radio" / "MyMesh.h"
     try:
-        tag = run(["git", "describe", "--tags", "--abbrev=0"], capture=True).strip()
-        if tag:
-            return tag
+        for line in mymesh.read_text(encoding="utf-8").splitlines():
+            m = re.search(r'#define\s+FIRMWARE_VERSION\s+"([^"]+)"', line)
+            if m:
+                return m.group(1)
     except Exception:
         pass
     return "v1.15.0"
