@@ -80,6 +80,16 @@ class BuildInfo:
         return f"{self.version}-{self.commit}"
 
 
+def find_pio() -> str:
+    pio = shutil.which("pio")
+    if pio:
+        return pio
+    fallback = Path.home() / ".platformio" / "penv" / "bin" / "pio"
+    if fallback.exists():
+        return str(fallback)
+    raise SystemExit("Error: 'pio' not found. Install PlatformIO or add it to PATH.")
+
+
 def run(args: list[str], *, env: dict[str, str] | None = None, capture: bool = False) -> str:
     result = subprocess.run(
         args,
@@ -120,7 +130,7 @@ def make_build_info() -> BuildInfo:
 
 
 def load_config() -> tuple[list[str], dict[str, str | None], list[str]]:
-    config = json.loads(run(["pio", "project", "config", "--json-output"], capture=True))
+    config = json.loads(run([find_pio(), "project", "config", "--json-output"], capture=True))
     envs: list[str] = []
     platforms: dict[str, str | None] = {}
     bases: list[str] = []
@@ -188,13 +198,13 @@ def maybe_create_nrf52_uf2(build_dir: Path, env: dict[str, str], platform: str |
 
 def maybe_merge_esp32(env_name: str, env: dict[str, str], platform: str | None) -> None:
     if platform == "ESP32_PLATFORM":
-        run(["pio", "run", "-t", "mergebin", "-e", env_name], env=env)
+        run([find_pio(), "run", "-t", "mergebin", "-e", env_name], env=env)
 
 
 def build_target(env_name: str, platform: str | None, build: BuildInfo) -> None:
     build_dir = ROOT / ".pio" / "build" / env_name
     firmware_name = f"{env_name}-{build.version_string}"
-    run(["pio", "run", "-e", env_name], env=build.env)
+    run([find_pio(), "run", "-e", env_name], env=build.env)
     maybe_merge_esp32(env_name, build.env, platform)
     maybe_create_nrf52_uf2(build_dir, build.env, platform)
     copy_artifacts(build_dir, firmware_name, platform)

@@ -109,6 +109,23 @@ void loop() {
     command[0] = 0;  // reset command buffer
   }
 
+#ifdef PIN_ADVERT_BTN
+  {
+    int btn = advert_btn.check();
+    if (btn == BUTTON_EVENT_CLICK) {
+#ifdef P_LORA_TX_LED
+      digitalWrite(P_LORA_TX_LED, HIGH); delay(150); digitalWrite(P_LORA_TX_LED, LOW);
+#endif
+      the_mesh.sendSelfAdvertisement(0, false);
+    } else if (btn == BUTTON_EVENT_DOUBLE_CLICK) {
+#ifdef P_LORA_TX_LED
+      for (int i = 0; i < 2; i++) { digitalWrite(P_LORA_TX_LED, HIGH); delay(80); digitalWrite(P_LORA_TX_LED, LOW); delay(80); }
+#endif
+      the_mesh.sendSelfAdvertisement(0, true);
+    }
+  }
+#endif
+
   the_mesh.loop();
   sensors.loop();
 #ifdef DISPLAY_CLASS

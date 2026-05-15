@@ -8,11 +8,15 @@ WaveshareBoard board;
 RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY, SPI1);
 WRAPPER_CLASS radio_driver(radio, board);
 
+MomentaryButton advert_btn(PIN_ADVERT_BTN, 0, true, true);
+
 VolatileRTCClock fallback_clock;
 AutoDiscoverRTCClock rtc_clock(fallback_clock);
 SensorManager sensors;
 
 bool radio_init() {
+  advert_btn.begin();
+
   rtc_clock.begin(Wire);
 
   SPI1.setSCK(P_LORA_SCLK);

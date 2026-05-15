@@ -243,6 +243,23 @@ void setup() {
 }
 
 void loop() {
+#ifdef PIN_ADVERT_BTN
+  {
+    int btn = advert_btn.check();
+    if (btn == BUTTON_EVENT_CLICK) {
+#ifdef P_LORA_TX_LED
+      digitalWrite(P_LORA_TX_LED, HIGH); delay(500); digitalWrite(P_LORA_TX_LED, LOW);
+#endif
+      the_mesh.advert();
+    } else if (btn == BUTTON_EVENT_DOUBLE_CLICK) {
+#ifdef P_LORA_TX_LED
+      for (int i = 0; i < 5; i++) { digitalWrite(P_LORA_TX_LED, HIGH); delay(50); digitalWrite(P_LORA_TX_LED, LOW); delay(50); }
+#endif
+      the_mesh.floodAdvert();
+    }
+  }
+#endif
+
   the_mesh.loop();
   sensors.loop();
 #ifdef DISPLAY_CLASS

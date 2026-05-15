@@ -915,14 +915,13 @@ void MyMesh::begin(bool has_display) {
     _store->saveMainIdentity(self_id);
   }
 
-// if name is provided as a build flag, use that as default node name instead
-#ifdef ADVERT_NAME
-  strcpy(_prefs.node_name, ADVERT_NAME);
-#else
+#ifndef ADVERT_NAME
   // use hex of first 4 bytes of identity public key as default node name
-  char pub_key_hex[10];
-  mesh::Utils::toHex(pub_key_hex, self_id.pub_key, 4);
-  strcpy(_prefs.node_name, pub_key_hex);
+  {
+    char pub_key_hex[10];
+    mesh::Utils::toHex(pub_key_hex, self_id.pub_key, 4);
+    strcpy(_prefs.node_name, pub_key_hex);
+  }
 #endif
 
   // if build provides default-scope, init with that
@@ -938,6 +937,11 @@ void MyMesh::begin(bool has_display) {
 
   // load persisted prefs
   _store->loadPrefs(_prefs, sensors.node_lat, sensors.node_lon);
+
+// if name is provided as a build flag, always use it (overrides saved prefs)
+#ifdef ADVERT_NAME
+  strcpy(_prefs.node_name, ADVERT_NAME);
+#endif
 
   // sanitise bad pref values
   _prefs.rx_delay_base = constrain(_prefs.rx_delay_base, 0, 20.0f);
@@ -2268,4 +2272,19 @@ bool MyMesh::advert() {
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
   return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;
+}
+
+bool MyMesh::floodAdvert() {
+  mesh::Packet* pkt;
+  if (_prefs.advert_loc_policy == ADVERT_LOC_NONE) {
+    pkt = createSelfAdvert(_prefs.node_name);
+  } else {
+    pkt = createSelfAdvert(_prefs.node_name, sensors.node_lat, sensors.node_lon);
+  }
+  if (pkt) {
+    sendFlood(pkt);
+    return true;
+  } else {
+    return false;
+  }
 }

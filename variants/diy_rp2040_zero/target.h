@@ -7,12 +7,14 @@
 #include <helpers/radiolib/CustomSX1262Wrapper.h>
 #include <helpers/radiolib/RadioLibWrappers.h>
 #include <helpers/SensorManager.h>
+#include <helpers/ui/MomentaryButton.h>
 #include <WaveshareBoard.h>
 
 extern WaveshareBoard board;
 extern WRAPPER_CLASS radio_driver;
 extern AutoDiscoverRTCClock rtc_clock;
 extern SensorManager sensors;
+extern MomentaryButton advert_btn;
 
 bool radio_init();
 uint32_t radio_get_rng_seed();

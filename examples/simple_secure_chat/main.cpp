@@ -372,6 +372,11 @@ public:
     }
   }
 
+  void sendZeroHopAdvert() {
+    auto pkt = createSelfAdvert(_prefs.node_name, _prefs.node_lat, _prefs.node_lon);
+    if (pkt) sendZeroHop(pkt);
+  }
+
   // ContactVisitor
   void onContactVisit(const ContactInfo& contact) override {
     Serial.printf("   %s - ", contact.name);
@@ -589,6 +594,23 @@ void setup() {
 }
 
 void loop() {
+#ifdef PIN_ADVERT_BTN
+  {
+    int btn = advert_btn.check();
+    if (btn == BUTTON_EVENT_CLICK) {
+#ifdef P_LORA_TX_LED
+      digitalWrite(P_LORA_TX_LED, HIGH); delay(150); digitalWrite(P_LORA_TX_LED, LOW);
+#endif
+      the_mesh.sendZeroHopAdvert();
+    } else if (btn == BUTTON_EVENT_DOUBLE_CLICK) {
+#ifdef P_LORA_TX_LED
+      for (int i = 0; i < 2; i++) { digitalWrite(P_LORA_TX_LED, HIGH); delay(80); digitalWrite(P_LORA_TX_LED, LOW); delay(80); }
+#endif
+      the_mesh.sendSelfAdvert(0);
+    }
+  }
+#endif
+
   the_mesh.loop();
   rtc_clock.tick();
 }
