@@ -27,7 +27,7 @@ void SerialForward::begin() {
   _channel_enabled = true;
 #else
   _channel_filter[0] = '\0';
-  _channel_enabled = false;
+  _channel_enabled = true;
 #endif
 
 #ifdef WITH_SERIAL_FORWARD_DM
