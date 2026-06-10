@@ -915,7 +915,10 @@ void MyMesh::begin(bool has_display) {
     _store->saveMainIdentity(self_id);
   }
 
-#ifndef ADVERT_NAME
+// if name is provided as a build flag, use that as default node name instead
+#ifdef ADVERT_NAME
+  strcpy(_prefs.node_name, ADVERT_NAME);
+#else
   // use hex of first 4 bytes of identity public key as default node name
   {
     char pub_key_hex[10];
@@ -937,11 +940,6 @@ void MyMesh::begin(bool has_display) {
 
   // load persisted prefs
   _store->loadPrefs(_prefs, sensors.node_lat, sensors.node_lon);
-
-// if name is provided as a build flag, always use it (overrides saved prefs)
-#ifdef ADVERT_NAME
-  strcpy(_prefs.node_name, ADVERT_NAME);
-#endif
 
   // sanitise bad pref values
   _prefs.rx_delay_base = constrain(_prefs.rx_delay_base, 0, 20.0f);
