@@ -1,10 +1,14 @@
 #include <Arduino.h>
 #include "target.h"
 
-DotMatrixBoard board;
+SuperMiniBoard board;
 
-static SPIClass spi;
-RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY, spi);
+#if defined(P_LORA_SCLK)
+  static SPIClass spi(FSPI);
+  RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY, spi);
+#else
+  RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY);
+#endif
 
 WRAPPER_CLASS radio_driver(radio, board);
 
@@ -16,8 +20,12 @@ bool radio_init() {
   fallback_clock.begin();
   rtc_clock.begin(Wire);
 
-  spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI);
+#if defined(P_LORA_SCLK)
+  spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI, P_LORA_NSS);
   return radio.std_init(&spi);
+#else
+  return radio.std_init();
+#endif
 }
 
 mesh::LocalIdentity radio_new_identity() {
